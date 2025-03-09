@@ -1,0 +1,71 @@
+name: Deploy para AWS EC2
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      # Passo 1: Testar conexão SSH
+      - name: Testar conexão SSH
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ubuntu
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            echo "✅ Conexão SSH bem-sucedida!"
+            docker --version
+
+      # Passo 2: Checkout do código
+      - name: Checkout do código
+        uses: actions/checkout@v4
+
+      # Passo 3: Build da imagem Docker
+      - name: Build e exportar imagem
+        run: |
+          echo "Diretório atual: $PWD"
+          echo "Conteúdo de $GITHUB_WORKSPACE:"
+          ls -la $GITHUB_WORKSPACE
+          docker build -t tax-invoice-validator .
+          docker save tax-invoice-validator -o $GITHUB_WORKSPACE/tax-invoice-validator.tar
+          ls -lh $GITHUB_WORKSPACE/tax-invoice-validator.tar  # Verificar tamanho do arquivo
+
+      # Passo 4: Transferir a imagem para a EC2
+      - name: Transferir a imagem para a EC2
+        run: |
+          echo "Transferindo o arquivo para a EC2..."
+          # Criar diretório .ssh se não existir
+          mkdir -p ~/.ssh
+          # Adicionar chave do host ao known_hosts (ignorar erro se o arquivo não existir inicialmente)
+          ssh-keyscan -H ${{ secrets.EC2_HOST }} >> ~/.ssh/known_hosts 2>/dev/null || true
+          # Criar arquivo temporário com a chave SSH
+          echo "${{ secrets.EC2_SSH_KEY }}" > /tmp/ssh_key.pem
+          chmod 600 /tmp/ssh_key.pem
+          # Transferir o arquivo usando SCP
+          scp -i /tmp/ssh_key.pem $GITHUB_WORKSPACE/tax-invoice-validator.tar ubuntu@${{ secrets.EC2_HOST }}:/home/ubuntu/
+          # Limpeza
+          rm /tmp/ssh_key.pem
+
+      # Passo 5: Implantar na EC2
+      - name: Implantar na EC2
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ubuntu
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            # Gerenciar container
+            docker stop tax-invoice-validator || true
+            docker rm tax-invoice-validator || true
+            
+            # Carregar e executar imagem
+            docker load -i /home/ubuntu/tax-invoice-validator.tar
+            docker run -d -p 8501:8501 --name car-truck-container car-truck-api
+            
+            echo "🚀 Implantação concluída com sucesso!"
