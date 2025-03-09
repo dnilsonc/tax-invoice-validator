@@ -1,0 +1,4 @@
+/API/.venv
+/API/__pycache__
+/Streamlit/.venv
+/Streamlit/modules/__pycache__
