@@ -61,11 +61,11 @@ jobs:
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
             # Gerenciar container
-            docker stop tax-invoice-validator || true
-            docker rm tax-invoice-validator || true
+            docker stop tax-invoice-validator-container || true
+            docker rm tax-invoice-validator-container || true
             
             # Carregar e executar imagem
             docker load -i /home/ubuntu/tax-invoice-validator.tar
-            docker run -d -p 8501:8501 --name car-truck-container car-truck-api
+            docker run -d -p 8501:8501 --name tax-invoice-validator-container tax-invoice-validator
             
             echo "🚀 Implantação concluída com sucesso!"
